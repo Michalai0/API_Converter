@@ -11,7 +11,7 @@ API_BASE_URL = "https://api.m513.cc/v1/chat/completions"  # 替换为实际的AP
 # 定义常见图片格式的正则表达式
 image_pattern = re.compile(r'.*\.(jpg|jpeg|png|gif|bmp|tiff|svg)$', re.IGNORECASE)
 timeout_duration = 600
-
+claude_model = ['claude-3.5-sonnet', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307']
 def json_to_python_boolean(value):
     if isinstance(value, bool):
         return value
@@ -26,17 +26,26 @@ def convert_messages(messages, model):
     for message in messages:
         role = message.get("role")
         content = message.get("content")
-        if role and content.startswith("https://michalai-ai.oss-cn-hongkong.aliyuncs.com"):
+        if role and isinstance(content, list):
+            if model in claude_model:
+                model = model + '-vision'
+            converted_messages.append({
+                "role": role,
+                "content": content
+            })
+        elif role and isinstance(content, str) and (content.startswith("https://michalai-ai.oss-cn-hongkong.aliyuncs.com") or content.startswith("https://cdn.m513.cc")):
             lines = content.split("\n\n")
             image_url = None
             file_url = None
             text = []
-            if model == "gpt-4-s" or model == "gpt-4-o":
+            if model == "gpt-4-all" or model == "gpt-4o-all" or model == "gpt-4o-mini-all":
                 print("OpenAI")
                 print(model)
                 image_url = lines[0].strip()
                 text.append(lines[1])
             else:
+                if model in claude_model:
+                    model = model + '-vision'
                 line = lines[0]
                 if image_pattern.search(line):
                     image_url = line.strip()
@@ -75,7 +84,7 @@ def convert_messages(messages, model):
         else:
             converted_messages.append(message)
 
-    return converted_messages
+    return converted_messages, model
 
 
 def streaming(converted_data, headers, stream_p):
@@ -87,7 +96,8 @@ def streaming(converted_data, headers, stream_p):
                 data = line.decode('utf-8')
                 yield f"{data}\n\n"
     else:
-        yield json.dumps({'error': 'Failed to push converted data to API'}).encode('utf-8')
+        error = response.text
+        yield json.dumps({'error': f'{error}Failed to push converted data to API'}).encode('utf-8')
 
 
 @app.route('/')
@@ -108,8 +118,8 @@ def convert_api():
         print(json.dumps(data, indent=2))
 
         if model and messages:
-            converted_messages = convert_messages(messages, model)
-
+            converted_messages, model = convert_messages(messages, model)
+            print(model)
             converted_data = {
                 "model": model,
                 "messages": converted_messages,
@@ -131,5 +141,3 @@ def convert_api():
 
 if __name__ == "__main__":
     app.run(debug=True, port=50601, host='0.0.0.0')
-
-
