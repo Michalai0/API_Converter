@@ -35,52 +35,59 @@ def convert_messages(messages, model):
             })
         elif role and isinstance(content, str) and (content.startswith("https://michalai-ai.oss-cn-hongkong.aliyuncs.com") or content.startswith("https://cdn.m513.cc")):
             lines = content.split("\n\n")
-            image_url = None
-            file_url = None
-            text = []
             if model == "gpt-4-all" or model == "gpt-4o-all" or model == "gpt-4o-mini-all":
                 print("OpenAI")
                 print(model)
-                image_url = lines[0].strip()
-                text.append(lines[1])
+                converted_content = []
+                for line in lines:
+                    if line.strip().startswith(
+                            ("https://michalai-ai.oss-cn-hongkong.aliyuncs.com", "https://cdn.m513.cc")):
+                        converted_content.append({
+                            "type": "file",
+                            "file_url": {
+                                "url": line.strip()
+                            }
+                        })
+                    elif line.strip():  # This will capture non-empty lines that are not URLs
+                        converted_content.append({
+                            "type": "text",
+                            "text": line.strip()
+                        })
+
+                converted_messages.append({
+                    "role": role,
+                    "content": converted_content
+                })
             else:
                 if model in claude_model:
                     model = model + '-vision'
-                line = lines[0]
-                if image_pattern.search(line):
-                    image_url = line.strip()
-                else:
-                    file_url = line.strip()
-                text.append(lines[1])
+                converted_content = []
+                for line in lines:
+                    if image_pattern.search(line):
+                        converted_content.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": line.strip()
+                            }
+                        })
+                    elif line.strip().startswith(("https://michalai-ai.oss-cn-hongkong.aliyuncs.com", "https://cdn.m513.cc")):
+                        converted_content.append({
+                            "type": "file",
+                            "file_url": {
+                                "url": line.strip()
+                            }
+                        })
+                    elif line.strip():
+                        converted_content.append({
+                            "type": "text",
+                            "text": line.strip()
+                        })
 
-            converted_content = []
-
-            if image_url:
-                converted_content.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": image_url
-                    }
+                converted_messages.append({
+                    "role": role,
+                    "content": converted_content
                 })
 
-            if file_url:
-                converted_content.append({
-                    "type": "file",
-                    "file_url": {
-                        "url": file_url
-                    }
-                })
-
-            if text:
-                converted_content.append({
-                    "type": "text",
-                    "text": "\n".join(text)
-                })
-
-            converted_messages.append({
-                "role": role,
-                "content": converted_content
-            })
         else:
             converted_messages.append(message)
 
